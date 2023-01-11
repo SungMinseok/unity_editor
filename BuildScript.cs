@@ -6,6 +6,7 @@ using System.IO;
 using System;
 using System.Text.RegularExpressions;
 using UnityEditor.Build.Reporting;
+using Unity.EditorCoroutines.Editor;
 namespace Container.Build
 {
     public class BuildScript : MonoBehaviour
@@ -16,66 +17,118 @@ namespace Container.Build
             instance = this;
         }
 
-        [MenuItem("Build/Alpha/All", false, priority:0)]
-        public static void BuildAlphaAll(){
-            Debug.Log("BuildAlphaAll");
-            BuildAlpha(0);
-        }
-        [MenuItem("Build/Alpha/Steam", false, priority:0)]
+        // [MenuItem("Build/Alpha/All", false, priority:-12)]
+        // public static void BuildAlphaAll(){
+        //     //Debug.Log("BuildAlphaAll");
+        //     Build(0,true);
+        //     Build(1,true);
+        // }
+        [MenuItem("SetSymbols/Alpha/Set Steam", false, priority:0)]
         public static void BuildAlphaOnlySteam(){
-            Debug.Log("BuildAlphaOnlySteam");
-            BuildAlpha(1);
+            //Debug.Log("BuildAlphaOnlySteam");
+            Build(0);
 
         }
-        [MenuItem("Build/Alpha/SteamX", false, priority:0)]
+        [MenuItem("SetSymbols/Alpha/Set SteamX", false, priority:0)]
         public static void BuildAlphaNoSteam(){
-            Debug.Log("BuildAlphaNoSteam");
-            BuildAlpha(2);
+            //Debug.Log("BuildAlphaNoSteam");
+            Build(1);
 
         }
-        [MenuItem("Build/Live/All", false, priority:0)]
-        public static void BuildLiveAll(){
-            Debug.Log("BuildLiveAll");
-            BuildLive(0);
+        #if STEAMWORKS_NET && alpha && !DISABLESTEAMWORKS
+        [MenuItem("Build/Alpha/Build Steam", false, priority:12)]
+        public static void BuildAlphaOnlySteamAndBuild(){
+            //Debug.Log("BuildAlphaOnlySteam");
+            Build(0,true);
 
         }
-        [MenuItem("Build/Live/Steam", false, priority:0)]
+        #elif STEAMWORKS_NET && alpha && DISABLESTEAMWORKS
+        [MenuItem("Build/Alpha/Build SteamX", false, priority:12)]
+        public static void BuildAlphaNoSteamAndBuild(){
+            //Debug.Log("BuildAlphaNoSteam");
+            Build(1,true);
+
+        }
+        #endif
+        // [MenuItem("Build/Live/All", false, priority:0)]
+        // public static void BuildLiveAll(){
+        //     //Debug.Log("BuildLiveAll");
+        //     Build(2);
+        //     Build(3);
+
+        // }
+        [MenuItem("SetSymbols/Live/Set Steam", false, priority:0)]
         public static void BuildLiveOnlySteam(){
-            Debug.Log("BuildLiveOnlySteam");
-            BuildLive(1);
+            //Debug.Log("BuildLiveOnlySteam");
+            Build(2);
 
         }
-        [MenuItem("Build/Live/SteamX", false, priority:0)]
+        [MenuItem("SetSymbols/Live/Set SteamX", false, priority:0)]
         public static void BuildLiveNoSteam(){
-            Debug.Log("BuildLiveNoSteam");
-            BuildLive(2);
+            //Debug.Log("BuildLiveNoSteam");
+            Build(3);
 
         }
+        #if STEAMWORKS_NET && live && !DISABLESTEAMWORKS
+        [MenuItem("Build/Live/Steam", false, priority:12)]
+        public static void BuildLiveOnlySteamAndBuild(){
+            //Debug.Log("BuildLiveOnlySteam");
+            Build(2,true);
+
+        }
+        #elif STEAMWORKS_NET && live && DISABLESTEAMWORKS
+        [MenuItem("Build/Live/SteamX", false, priority:12)]
+        public static void BuildLiveNoSteamAndBuild(){
+            //Debug.Log("BuildLiveNoSteam");
+            Build(3,true);
+
+        }
+        #endif
         /// <summary>
         /// 0:all, 1:onlySteam, 2:noSteam
         /// </summary>
         /// <param name="steamOption"> 왜 안돼 </param>
-        public static void BuildAlpha(int steamOption)
+        public static void Build(int steamOption, bool isBuild = false)
         {
             //List<string> defineStrArray = new List<string>();
             string currentDefines = PlayerSettings.GetScriptingDefineSymbolsForGroup(EditorUserBuildSettings.selectedBuildTargetGroup);
             HashSet<string> defines = new HashSet<string>();
 
-            if (steamOption == 0){
-                Debug.Log($"Build Start : alpha - steam both ");
-            }
+            string buildType = "none";
+            bool forSteam = false;
 
-            else if(steamOption == 1){
-                Debug.Log($"Build Start : alpha - steam included ");
-                defines = new HashSet<string>(currentDefines.Split(';')) {
+            if(steamOption == 0){
+                Debug.Log($"Build Start : Alpha - steam included ");
+                defines = new HashSet<string>() {
                     "STEAMWORKS_NET","alpha"
                 };
+                defines.Remove("DISABLESTEAMWORKS");
+                buildType = "Alpha";
+                forSteam = true;
             }
-            else if(steamOption == 2){
-                Debug.Log($"Build Start : alpha - steam excluded ");
-                defines = new HashSet<string>(currentDefines.Split(';')) {
+            else if(steamOption == 1){
+                Debug.Log($"Build Start : Alpha - steam excluded ");
+                defines = new HashSet<string>() {
                     "STEAMWORKS_NET","alpha","DISABLESTEAMWORKS"
                 };
+                buildType = "Alpha";
+                forSteam = false;
+            }
+            else if(steamOption == 2){
+                Debug.Log($"Build Start : Live - steam included ");
+                defines = new HashSet<string>() {
+                    "STEAMWORKS_NET","live"
+                };
+                buildType = "Live";
+                forSteam = true;
+            }
+            else if(steamOption == 3){
+                Debug.Log($"Build Start : Live - steam excluded ");
+                defines = new HashSet<string>() {
+                    "STEAMWORKS_NET","live","DISABLESTEAMWORKS"
+                };
+                buildType = "Live";
+                forSteam = false;
             }
 
 
@@ -87,27 +140,35 @@ namespace Container.Build
 
             buildOption.scenes = GetBuildSceneList();
             buildOption.target = BuildTarget.StandaloneWindows64;
-                //스팀미포함
-                string fileName = string.Format("/Build/Alpha_SteamX/JID_Alpha_{0}_{1}/{2}.exe"
-                ,currentVersion,currentTimeText,PlayerSettings.productName);
 
-                buildOption.locationPathName = Application.persistentDataPath + fileName;
+            string fileName = string.Format($"/Build/{buildType}_{(forSteam ? "Steam" : "SteamX")}/JID_{buildType}_{currentVersion}_{currentTimeText}/{PlayerSettings.productName}.exe");
 
-                string newDefines = string.Join(";", defines);
-                if (newDefines != currentDefines) {
-                    PlayerSettings.SetScriptingDefineSymbolsForGroup(EditorUserBuildSettings.selectedBuildTargetGroup, newDefines);
-                }
+            buildOption.locationPathName = Application.persistentDataPath + fileName;
+            //buildOption.options = BuildOptions.DetailedBuildReport;
 
-                //instance.StartCoroutine(StartBuildPlayer(buildOption));
-                //Debug.Log($"Build completed : alpha - steam excluded ");
-                
+            string newDefines = string.Join(";", defines);
+
+            PlayerSettings.SetScriptingDefineSymbolsForGroup(buildTargetGroup, newDefines);
+
+            Debug.Log(newDefines);
+
+            Unity.CodeEditor.CodeEditor.CurrentEditor.SyncAll();
+            //AssetDatabase.SaveAssets();
+
+            //Build(0, true);
+            //=useDelay(buildOption);
+
+            if(isBuild){
+
                 BuildReport report = BuildPipeline.BuildPlayer(buildOption);
                 BuildSummary summary = report.summary;
+
+                report.mak
                 
                 
                 if (summary.result == BuildResult.Succeeded)
                 {
-                    Debug.Log($"Build succeeded: {summary.totalSize}bytes. {summary.totalTime}s");
+                    Debug.Log($"Build succeeded: {summary.totalSize* 0.000001f}bytes. {summary.totalTime.Seconds}s");
                     Debug.Log(summary.outputPath);
                 }
 
@@ -115,11 +176,44 @@ namespace Container.Build
                 {
                     Debug.Log("Build failed");
                 }
-            //}
+            }
 
 
 
 
+
+        }
+
+
+        static void useDelay(BuildPlayerOptions buildOption)
+        {
+            object obj = new object();
+            EditorCoroutineUtility.StartCoroutine(IEDelayEditor(buildOption), obj);
+        }
+        
+        static IEnumerator IEDelayEditor(BuildPlayerOptions buildOption)
+        {
+            Debug.Log("Wait 1 second");
+            yield return new EditorWaitForSeconds(20f);
+            Debug.Log("After 1 second");
+            
+            BuildReport report = BuildPipeline.BuildPlayer(buildOption);
+            BuildSummary summary = report.summary;
+            
+            
+            if (summary.result == BuildResult.Succeeded)
+            {
+                Debug.Log($"Build succeeded: {summary.totalSize* 0.000001f}MB, for {summary.totalTime.Seconds}s");
+                Debug.Log(summary.outputPath);
+            }
+
+            if (summary.result == BuildResult.Failed)
+            {
+                Debug.Log("Build failed");
+            }
+        }
+        public static void RealBuild(){
+            
         }
         public static void BuildLive(int steamOption)
         {
